@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { supabase, User, AccessLog, Payment, MEMBERSHIP_LABELS } from '../lib/supabase';
 import {
   format, parseISO, differenceInCalendarDays,
@@ -124,13 +125,18 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-brand">⬡ People Pass</h1>
           <p className="text-sm text-gray-500 mt-0.5">Panel de control · {format(new Date(), "d 'de' MMMM yyyy", { locale: es })}</p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors disabled:opacity-50"
-        >
-          {loading ? '⟳ Actualizando...' : '⟳ Actualizar'}
-        </button>
+        <div className="flex gap-2">
+          <Link href="/usuarios" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            👤 Usuarios
+          </Link>
+          <Link href="/qrs" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            QR Codes
+          </Link>
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors disabled:opacity-50">
+            {loading ? '⟳ Actualizando...' : '⟳ Actualizar'}
+          </button>
+        </div>
       </div>
       {lastSync && (
         <p className="text-xs text-gray-600 -mt-8">

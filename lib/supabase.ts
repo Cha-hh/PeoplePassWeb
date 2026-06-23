@@ -39,6 +39,7 @@ export interface Payment {
   paymentMethod: PaymentMethod;
   renewalDate: string;
   paidAt: string;
+  notes?: string;
 }
 
 export const MEMBERSHIP_LABELS: Record<MembershipType, string> = {
