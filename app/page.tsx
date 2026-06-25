@@ -76,6 +76,13 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Recarga automática cuando el usuario vuelve a la pestaña
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [load]);
+
   // ── Derived stats ─────────────────────────────────────────────────────────
 
   const realUsers  = users.filter(u => !['wellhub', 'fitness_pass', 'visit_pass', 'trial_pass'].includes(u.membershipType));
