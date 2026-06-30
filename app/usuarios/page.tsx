@@ -51,6 +51,11 @@ export default function UsuariosPage() {
           <h1 className="text-2xl font-bold text-brand">👤 Usuarios</h1>
           <p className="text-sm text-gray-500 mt-0.5"><Link href="/" className="text-brand hover:underline">← Dashboard</Link></p>
         </div>
+        <Link href="/usuarios/nuevo"
+          className="px-4 py-2 rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand/90 transition-colors"
+        >
+          + Nuevo usuario
+        </Link>
       </div>
 
       {/* Filtros */}
