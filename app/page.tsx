@@ -136,6 +136,9 @@ export default function Dashboard() {
           <Link href="/usuarios" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
             👤 Usuarios
           </Link>
+          <Link href="/reportes" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            📊 Reportes
+          </Link>
           <Link href="/qrs" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
             QR Codes
           </Link>
