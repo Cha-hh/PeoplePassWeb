@@ -144,6 +144,9 @@ export default function UserDetailPage() {
       supabase.from('access_logs').delete().eq('userId', id),
     ]);
     await supabase.from('users').delete().eq('id', id);
+    // Registra el borrado para que el iPad lo elimine localmente
+    // en vez de volver a subirlo en el siguiente sync.
+    await supabase.from('deleted_users').upsert({ id });
     setSaving(false);
     router.push('/usuarios');
   };
