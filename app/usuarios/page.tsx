@@ -32,7 +32,7 @@ export default function UsuariosPage() {
       (u.phone ?? '').includes(search);
     if (!matchSearch) return false;
     if (filter === 'active')  return u.membershipStatus === 'active' && daysLeft(u.renewalDate) > 7;
-    if (filter === 'expired') return u.membershipStatus === 'expired';
+    if (filter === 'expired') return u.membershipStatus === 'expired' || daysLeft(u.renewalDate) < 0;
     if (filter === 'soon')    return u.membershipStatus === 'active' && daysLeft(u.renewalDate) <= 7 && daysLeft(u.renewalDate) >= 0;
     return true;
   });
@@ -40,7 +40,7 @@ export default function UsuariosPage() {
   const counts = {
     all:     users.length,
     active:  users.filter(u => u.membershipStatus === 'active' && daysLeft(u.renewalDate) > 7).length,
-    expired: users.filter(u => u.membershipStatus === 'expired').length,
+    expired: users.filter(u => u.membershipStatus === 'expired' || daysLeft(u.renewalDate) < 0).length,
     soon:    users.filter(u => u.membershipStatus === 'active' && daysLeft(u.renewalDate) <= 7 && daysLeft(u.renewalDate) >= 0).length,
   };
 
@@ -89,7 +89,7 @@ export default function UsuariosPage() {
         <div className="space-y-2">
           {filtered.map(u => {
             const d       = daysLeft(u.renewalDate);
-            const expired = u.membershipStatus === 'expired';
+            const expired = u.membershipStatus === 'expired' || d < 0;
             const soon    = !expired && d <= 7 && d >= 0;
             return (
               <Link key={u.id} href={`/usuarios/${u.id}`}
