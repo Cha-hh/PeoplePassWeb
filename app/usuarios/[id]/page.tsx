@@ -139,13 +139,10 @@ export default function UserDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteUser = async () => {
     setSaving(true);
-    await Promise.all([
-      supabase.from('payments').delete().eq('userId', id),
-      supabase.from('access_logs').delete().eq('userId', id),
-    ]);
     await supabase.from('users').delete().eq('id', id);
-    // Registra el borrado para que el iPad lo elimine localmente
-    // en vez de volver a subirlo en el siguiente sync.
+    // Registra el borrado para que el iPad lo elimine localmente.
+    // Los pagos y accesos se conservan en Supabase para mantener
+    // el historial financiero y de asistencia en los reportes.
     await supabase.from('deleted_users').upsert({ id });
     setSaving(false);
     router.push('/usuarios');
