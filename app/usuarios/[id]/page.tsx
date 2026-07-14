@@ -1,11 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase, User, Payment, MEMBERSHIP_LABELS } from '../../../lib/supabase';
+import { supabase, User, Payment, MembershipType, MEMBERSHIP_LABELS } from '../../../lib/supabase';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+const MEMBERSHIP_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+  full_pass:    { bg: '#0d9488', text: '#ffffff' },
+  '3_pass':     { bg: '#0284c7', text: '#ffffff' },
+  '2_pass':     { bg: '#7c3aed', text: '#ffffff' },
+  visit_pass:   { bg: '#ea580c', text: '#ffffff' },
+  trial_pass:   { bg: '#92400e', text: '#ffffff' },
+  wellhub:      { bg: '#be185d', text: '#ffffff' },
+  fitness_pass: { bg: '#b45309', text: '#ffffff' },
+};
 
 const MEMBERSHIP_TYPES = ['full_pass', '3_pass', '2_pass', 'visit_pass', 'trial_pass'] as const;
 
@@ -51,6 +61,7 @@ export default function UserDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
 
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
   const [user,     setUser]     = useState<User | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -80,6 +91,106 @@ export default function UserDetailPage() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  // Genera el QR en canvas cuando carga el usuario
+  useEffect(() => {
+    if (!user || !qrCanvasRef.current) return;
+    import('qrcode').then(QRCode => {
+      QRCode.toCanvas(qrCanvasRef.current!, user.qrCode, {
+        width: 180, margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+    });
+  }, [user]);
+
+  // Descarga tarjeta con QR + nombre + membresía con branding People Pass
+  const downloadQrCard = async () => {
+    if (!user) return;
+    const QRCode = await import('qrcode');
+
+    const W = 400, H = 520;
+    const canvas = document.createElement('canvas');
+    canvas.width  = W * 2; // retina
+    canvas.height = H * 2;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(2, 2);
+
+    // Fondo oscuro
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Franja superior teal
+    const grad = ctx.createLinearGradient(0, 0, W, 60);
+    grad.addColorStop(0, '#0d9488');
+    grad.addColorStop(1, '#0f766e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 60);
+
+    // Logo texto ⬡ People Pass
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⬡ People Pass', W / 2, 40);
+
+    // Cuadro blanco para el QR
+    const qrSize = 200;
+    const qrX = (W - qrSize) / 2;
+    const qrY = 80;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, 16);
+    ctx.fill();
+
+    // QR sobre el canvas
+    const qrCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qrCanvas, user.qrCode, { width: qrSize, margin: 1, color: { dark: '#000000', light: '#ffffff' } });
+    ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+    // Nombre del usuario
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    // Truncar nombre largo
+    let name = user.name;
+    while (ctx.measureText(name).width > W - 48 && name.length > 4) name = name.slice(0, -1);
+    if (name !== user.name) name += '…';
+    ctx.fillText(name, W / 2, qrY + qrSize + 52);
+
+    // Badge de membresía
+    const badge = MEMBERSHIP_BADGE_COLORS[user.membershipType] ?? { bg: '#0d9488', text: '#fff' };
+    const label = MEMBERSHIP_LABELS[user.membershipType as MembershipType] ?? user.membershipType;
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    const bw = ctx.measureText(label).width + 32;
+    const bx = (W - bw) / 2;
+    const by = qrY + qrSize + 66;
+    ctx.fillStyle = badge.bg;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, 30, 15);
+    ctx.fill();
+    ctx.fillStyle = badge.text;
+    ctx.fillText(label, W / 2, by + 20);
+
+    // Línea divisoria y código QR abreviado
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(32, H - 56);
+    ctx.lineTo(W - 32, H - 56);
+    ctx.stroke();
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    const shortCode = user.qrCode.length > 28 ? user.qrCode.slice(0, 28) + '…' : user.qrCode;
+    ctx.fillText(shortCode, W / 2, H - 36);
+    ctx.fillText('Acceso individual e intransferible', W / 2, H - 18);
+
+    // Descarga
+    const link = document.createElement('a');
+    link.download = `QR-${user.name.replace(/\s+/g, '_')}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   const notify = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000); };
 
@@ -222,6 +333,21 @@ export default function UserDetailPage() {
         </div>
       </div>
 
+      {/* QR card */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 flex flex-col sm:flex-row items-center gap-5">
+        <div className="rounded-xl bg-white p-2 shadow-lg flex-shrink-0">
+          <canvas ref={qrCanvasRef} />
+        </div>
+        <div className="flex flex-col gap-2 items-center sm:items-start">
+          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">Código QR de acceso</p>
+          <p className="text-xs text-gray-600 font-mono break-all">{user.qrCode}</p>
+          <button onClick={downloadQrCard}
+            className="mt-1 px-4 py-2 rounded-lg border border-brand/50 text-brand text-sm font-semibold hover:bg-brand/10 transition-colors flex items-center gap-2">
+            ⬇ Descargar tarjeta QR
+          </button>
+        </div>
+      </div>
+
       {/* Info cards */}
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-2">
@@ -345,8 +471,8 @@ export default function UserDetailPage() {
           <p className="text-sm text-gray-300">
             ¿Estás seguro de que quieres eliminar a <span className="font-bold text-white">{user.name}</span>?
           </p>
-          <p className="text-sm text-red-400">
-            Se borrarán también todos sus pagos y registros de acceso. Esta acción no se puede deshacer.
+          <p className="text-sm text-gray-400">
+            Sus pagos y registros de acceso se conservarán en los reportes históricos.
           </p>
           <div className="flex gap-3 mt-2">
             <button onClick={() => setConfirmDelete(false)}
