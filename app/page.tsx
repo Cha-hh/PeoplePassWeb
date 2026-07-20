@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { supabase, User, AccessLog, Payment, MEMBERSHIP_LABELS } from '../lib/supabase';
 import {
   format, parseISO, differenceInCalendarDays,
-  startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
-  isToday,
+  startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  isToday, subMonths,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -86,8 +86,8 @@ export default function Dashboard() {
   // ── Derived stats ─────────────────────────────────────────────────────────
 
   const realUsers  = users.filter(u => !['wellhub', 'fitness_pass', 'visit_pass', 'trial_pass'].includes(u.membershipType));
-  const active     = realUsers.filter(u => u.membershipStatus === 'active');
-  const expired    = realUsers.filter(u => u.membershipStatus === 'expired');
+  const active     = realUsers.filter(u => u.membershipStatus === 'active' && daysLeft(u.renewalDate) > 0);
+  const expired    = realUsers.filter(u => u.membershipStatus === 'expired' || daysLeft(u.renewalDate) < 0);
   const expiringSoon = realUsers.filter(u => {
     const d = daysLeft(u.renewalDate);
     return d >= 0 && d <= 7;
@@ -98,6 +98,17 @@ export default function Dashboard() {
   const deniedToday  = todayLogs.filter(l => l.status === 'denied').length;
 
   const now    = new Date();
+
+  // KPIs de retención
+  const monthStart     = startOfMonth(now);
+  const threeMonthsAgo = subMonths(now, 3);
+  const newThisMonth   = realUsers.filter(u => parseISO(u.startDate) >= monthStart);
+  const loyalMembers   = realUsers.filter(u =>
+    (u.membershipStatus === 'active' || daysLeft(u.renewalDate) >= 0) &&
+    parseISO(u.startDate) <= threeMonthsAgo
+  );
+  const lostMembers    = expired.filter(u => daysLeft(u.renewalDate) < -30);
+
   const rangeStart = payRange === 'week'
     ? startOfWeek(now, { weekStartsOn: 1 })
     : startOfMonth(now);
@@ -127,39 +138,41 @@ export default function Dashboard() {
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-10">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-brand">⬡ People Pass</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Panel de control · {format(new Date(), "d 'de' MMMM yyyy", { locale: es })}</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/usuarios" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
-            👤 Usuarios
-          </Link>
-          <Link href="/reportes" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
-            📊 Reportes
-          </Link>
-          <Link href="/qrs" className="px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
-            QR Codes
-          </Link>
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-brand">⬡ People Pass</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Panel de control · {format(new Date(), "d 'de' MMMM yyyy", { locale: es })}</p>
+            {lastSync && <p className="text-xs text-gray-600 mt-0.5">Actualizado: {format(lastSync, 'HH:mm:ss')}</p>}
+          </div>
           <button onClick={load} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors disabled:opacity-50">
-            {loading ? '⟳ Actualizando...' : '⟳ Actualizar'}
+            className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors disabled:opacity-50">
+            {loading ? '⟳' : '⟳'}
+            <span className="hidden sm:inline">{loading ? 'Actualizando...' : 'Actualizar'}</span>
           </button>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/usuarios" className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            👤 <span className="hidden xs:inline">Usuarios</span>
+          </Link>
+          <Link href="/reportes" className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            📊 <span className="hidden xs:inline">Reportes</span>
+          </Link>
+          <Link href="/qrs" className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 text-sm hover:border-brand transition-colors">
+            QR <span className="hidden xs:inline">Codes</span>
+          </Link>
+          <Link href="/usuarios/nuevo" className="px-3 py-1.5 rounded-lg bg-brand/10 border border-brand text-brand text-sm font-semibold hover:bg-brand/20 transition-colors">
+            + <span className="hidden xs:inline">Nuevo usuario</span>
+          </Link>
+        </div>
       </div>
-      {lastSync && (
-        <p className="text-xs text-gray-600 -mt-8">
-          Última actualización: {format(lastSync, 'HH:mm:ss')}
-        </p>
-      )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Activos"        value={active.length}   sub={`de ${realUsers.length} totales`}   color="border-teal-800 bg-teal-950/40" />
-        <StatCard label="Vencidos"       value={expired.length}  sub="requieren renovación"                color="border-red-800 bg-red-950/40" />
-        <StatCard label="Accesos hoy"    value={grantedToday}    sub={`${deniedToday} denegados`}          color="border-blue-800 bg-blue-950/40" />
-        <StatCard label="Por vencer"     value={expiringSoon.length} sub="próximos 7 días"                 color="border-yellow-700 bg-yellow-950/40" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Activos"    value={active.length}       sub={`de ${realUsers.length} totales`} color="border-teal-800 bg-teal-950/40" />
+        <StatCard label="Vencidos"   value={expired.length}      sub="requieren renovación"              color="border-red-800 bg-red-950/40" />
+        <StatCard label="Accesos hoy" value={grantedToday}       sub={`${deniedToday} denegados`}        color="border-blue-800 bg-blue-950/40" />
+        <StatCard label="Por vencer" value={expiringSoon.length} sub="próximos 7 días"                   color="border-yellow-700 bg-yellow-950/40" />
       </div>
 
       {/* Ingresos */}
@@ -179,21 +192,42 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-xl border border-green-800 bg-green-950/30 p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-green-800 bg-green-950/30 p-4">
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">💵 Efectivo</p>
-            <p className="text-2xl font-bold text-green-400">{money(cashTotal)}</p>
+            <p className="text-xl font-bold text-green-400">{money(cashTotal)}</p>
             <p className="text-xs text-gray-500 mt-1">{rangePayments.filter(p => p.paymentMethod === 'cash').length} pagos</p>
           </div>
-          <div className="rounded-xl border border-blue-800 bg-blue-950/30 p-5">
+          <div className="rounded-xl border border-blue-800 bg-blue-950/30 p-4">
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">💳 Tarjeta</p>
-            <p className="text-2xl font-bold text-blue-400">{money(cardTotal)}</p>
+            <p className="text-xl font-bold text-blue-400">{money(cardTotal)}</p>
             <p className="text-xs text-gray-500 mt-1">{rangePayments.filter(p => p.paymentMethod === 'card').length} pagos</p>
           </div>
-          <div className="rounded-xl border border-teal-700 bg-teal-950/30 p-5">
+          <div className="rounded-xl border border-teal-700 bg-teal-950/30 p-4">
             <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">💰 Total</p>
-            <p className="text-2xl font-bold text-brand">{money(totalIncome)}</p>
+            <p className="text-xl font-bold text-brand">{money(totalIncome)}</p>
             <p className="text-xs text-gray-500 mt-1">{rangePayments.length} pagos</p>
+          </div>
+        </div>
+      </Section>
+
+      {/* Retención */}
+      <Section title="Retención de miembros">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-teal-800 bg-teal-950/30 p-4">
+            <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">🆕 Nuevos este mes</p>
+            <p className="text-2xl font-bold text-teal-300">{newThisMonth.length}</p>
+            <p className="text-xs text-gray-500 mt-1">inscritos en {format(now, 'MMMM', { locale: es })}</p>
+          </div>
+          <div className="rounded-xl border border-violet-800 bg-violet-950/30 p-4">
+            <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">⭐ Fieles +3 meses</p>
+            <p className="text-2xl font-bold text-violet-300">{loyalMembers.length}</p>
+            <p className="text-xs text-gray-500 mt-1">activos desde hace más de 3 meses</p>
+          </div>
+          <div className="rounded-xl border border-orange-800 bg-orange-950/30 p-4">
+            <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">💤 Perdidos &gt;30d</p>
+            <p className="text-2xl font-bold text-orange-300">{lostMembers.length}</p>
+            <p className="text-xs text-gray-500 mt-1">vencidos hace más de 30 días</p>
           </div>
         </div>
       </Section>
@@ -289,17 +323,27 @@ export default function Dashboard() {
 
       {/* Vencidos */}
       <Section title={`Membresías vencidas (${expired.length})`}>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {expired.map(u => (
-            <div key={u.id} className="rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-3 flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium">{u.name}</p>
-                <p className="text-xs text-gray-500">{MEMBERSHIP_LABELS[u.membershipType]}</p>
-              </div>
-              <p className="text-xs text-red-400">venció {fmt(u.renewalDate)}</p>
-            </div>
-          ))}
-        </div>
+        {expired.length === 0 ? (
+          <p className="text-sm text-gray-500">Sin membresías vencidas</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {expired
+              .sort((a, b) => daysLeft(b.renewalDate) - daysLeft(a.renewalDate))
+              .map(u => {
+                const d = Math.abs(daysLeft(u.renewalDate));
+                return (
+                  <Link key={u.id} href={`/usuarios/${u.id}`}
+                    className="rounded-lg border border-red-900/50 bg-red-950/20 px-4 py-3 flex items-center justify-between gap-2 hover:border-red-600/60 transition-colors group">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate group-hover:text-red-300 transition-colors">{u.name}</p>
+                      <p className="text-xs text-gray-500">{MEMBERSHIP_LABELS[u.membershipType]}</p>
+                    </div>
+                    <p className="text-xs text-red-400 flex-shrink-0">hace {d}d</p>
+                  </Link>
+                );
+              })}
+          </div>
+        )}
       </Section>
 
     </div>
